@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { API_URL } from "../lib/api";
 
 export default function Profile() {
     const router = useRouter();
@@ -12,7 +13,7 @@ export default function Profile() {
     useEffect(() => {
         const fetchProfile = async () => {
             try {
-                const res = await fetch("http://localhost:5000/api/auth/profile", { credentials: "include" });
+                const res = await fetch(`${API_URL}/api/auth/profile`, { credentials: "include" });
                 if (!res.ok) { router.push("/auth"); return; }
                 setProfile(await res.json());
             } catch { router.push("/auth"); }
@@ -24,7 +25,7 @@ export default function Profile() {
     const handleToggleAnonymous = async () => {
         setToggling(true);
         try {
-            const res = await fetch("http://localhost:5000/api/auth/toggle-anonymous", { method: "PUT", credentials: "include" });
+            const res = await fetch(`${API_URL}/api/auth/toggle-anonymous`, { method: "PUT", credentials: "include" });
             if (res.ok) {
                 const data = await res.json();
                 setProfile((prev: any) => ({ ...prev, isAnonymous: data.isAnonymous, username: data.username }));
@@ -34,7 +35,7 @@ export default function Profile() {
     };
 
     const handleLogout = async () => {
-        await fetch("http://localhost:5000/api/auth/logout", { method: "POST", credentials: "include" });
+        await fetch(`${API_URL}/api/auth/logout`, { method: "POST", credentials: "include" });
         router.push("/auth");
     };
 

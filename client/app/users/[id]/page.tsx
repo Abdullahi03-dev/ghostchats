@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
+import { API_URL } from "../../lib/api";
 
 interface UserProfile {
     _id: string;
@@ -28,7 +29,7 @@ export default function UserProfilePage() {
     useEffect(() => {
         const fetchUser = async () => {
             try {
-                const res = await fetch(`http://localhost:5000/api/users/${userId}`, { credentials: "include" });
+                const res = await fetch(`${API_URL}/api/users/${userId}`, { credentials: "include" });
                 if (!res.ok) {
                     if (res.status === 401) { router.push("/auth"); return; }
                     setError("User not found");

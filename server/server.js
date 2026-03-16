@@ -23,15 +23,19 @@ dotenv.config();
 const app = express();
 const httpServer = createServer(app);
 
+const allowedOrigins = (process.env.CLIENT_URL || "http://localhost:3000")
+    .split(",")
+    .map((s) => s.trim());
+
 const io = new Server(httpServer, {
     cors: {
-        origin: "http://localhost:3000",
+        origin: allowedOrigins,
         credentials: true,
     },
 });
 
 app.use(cors({
-    origin: "http://localhost:3000",
+    origin: allowedOrigins,
     credentials: true,
 }));
 

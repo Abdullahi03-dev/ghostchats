@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { API_URL } from "../lib/api";
 
 interface User {
     _id: string;
@@ -22,7 +23,7 @@ export default function UsersPage() {
     useEffect(() => {
         const fetchUsers = async () => {
             try {
-                const res = await fetch("http://localhost:5000/api/users", { credentials: "include" });
+                const res = await fetch(`${API_URL}/api/users`, { credentials: "include" });
                 if (!res.ok) { router.push("/auth"); return; }
                 setUsers(await res.json());
             } catch (err) {

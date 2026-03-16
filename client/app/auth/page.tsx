@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { API_URL } from "../lib/api";
 
 export default function Auth() {
     const router = useRouter();
@@ -22,7 +23,7 @@ export default function Auth() {
             : { username, email, password, isAnonymous: false };
 
         try {
-            const response = await fetch(`http://localhost:5000/api/auth/${endpoint}`, {
+            const response = await fetch(`${API_URL}/api/auth/${endpoint}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 credentials: "include",

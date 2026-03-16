@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { io, Socket } from "socket.io-client";
+import { API_URL } from "../lib/api";
 
 interface Room {
     _id: string;
@@ -57,8 +58,8 @@ export default function Dashboard() {
         const fetchData = async () => {
             try {
                 const [profileRes, roomsRes] = await Promise.all([
-                    fetch("http://localhost:5000/api/auth/profile", { credentials: "include" }),
-                    fetch("http://localhost:5000/api/rooms", { credentials: "include" }),
+                    fetch(`${API_URL}/api/auth/profile`, { credentials: "include" }),
+                    fetch(`${API_URL}/api/rooms`, { credentials: "include" }),
                 ]);
                 if (!profileRes.ok) { router.push("/auth"); return; }
                 const profileData = await profileRes.json();
@@ -82,7 +83,7 @@ export default function Dashboard() {
 
     useEffect(() => {
         if (!profile) return;
-        socket = io("http://localhost:5000", { withCredentials: true });
+        socket = io(API_URL, { withCredentials: true });
         socket.on("newMessage", (msg: Message) => setMessages((prev) => [...prev, msg]));
         socket.on("messageVanished", (messageId: string) => {
             setMessages((prev) => prev.map((m) => (m._id === messageId ? { ...m, vanishing: true } : m)));
@@ -119,7 +120,7 @@ export default function Dashboard() {
 
         // Try to join the room
         try {
-            const joinRes = await fetch(`http://localhost:5000/api/rooms/join/${room._id}`, {
+            const joinRes = await fetch(`${API_URL}/api/rooms/join/${room._id}`, {
                 method: "POST", credentials: "include",
             });
             const joinData = await joinRes.json();
@@ -134,7 +135,7 @@ export default function Dashboard() {
         } catch (err) { console.error(err); }
 
         try {
-            const res = await fetch(`http://localhost:5000/api/messages/${room._id}`, { credentials: "include" });
+            const res = await fetch(`${API_URL}/api/messages/${room._id}`, { credentials: "include" });
             if (res.ok) setMessages(await res.json());
         } catch (err) { console.error(err); }
 
@@ -145,7 +146,7 @@ export default function Dashboard() {
         if (!newRoomName.trim()) return;
         setCreateError("");
         try {
-            const res = await fetch("http://localhost:5000/api/rooms/create", {
+            const res = await fetch(`${API_URL}/api/rooms/create`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 credentials: "include",
@@ -162,7 +163,7 @@ export default function Dashboard() {
 
     const fetchPendingRequests = async (roomId: string) => {
         try {
-            const res = await fetch(`http://localhost:5000/api/rooms/pending/${roomId}`, { credentials: "include" });
+            const res = await fetch(`${API_URL}/api/rooms/pending/${roomId}`, { credentials: "include" });
             if (res.ok) setPendingRequests(await res.json());
         } catch (err) { console.error(err); }
     };
@@ -170,7 +171,7 @@ export default function Dashboard() {
     const handleApprove = async (userId: string) => {
         if (!activeRoom) return;
         try {
-            await fetch(`http://localhost:5000/api/rooms/approve/${activeRoom._id}/${userId}`, {
+            await fetch(`${API_URL}/api/rooms/approve/${activeRoom._id}/${userId}`, {
                 method: "POST", credentials: "include",
             });
             setPendingRequests((prev) => prev.filter((u) => u._id !== userId));
@@ -180,7 +181,7 @@ export default function Dashboard() {
     const handleReject = async (userId: string) => {
         if (!activeRoom) return;
         try {
-            await fetch(`http://localhost:5000/api/rooms/reject/${activeRoom._id}/${userId}`, {
+            await fetch(`${API_URL}/api/rooms/reject/${activeRoom._id}/${userId}`, {
                 method: "POST", credentials: "include",
             });
             setPendingRequests((prev) => prev.filter((u) => u._id !== userId));
