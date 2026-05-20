@@ -16,7 +16,7 @@ export const signup = async (req, res) => {
 
         const finalUsername = isAnonymous ? generateGhostName() : username;
 
-        const user = await User.create({ username: finalUsername, email, password, isAnonymous });
+        const user = await User.create({ username: finalUsername, email, password, isAnonymous: true });
 
         generateToken(res, user._id);
 

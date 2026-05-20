@@ -125,6 +125,20 @@ io.on("connection", (socket) => {
         }
     });
 
+    // Typing indicator
+    socket.on("typing", ({ roomId }) => {
+        socket.to(roomId).emit("userTyping", {
+            userId: socket.user._id,
+            username: socket.user.username,
+        });
+    });
+
+    socket.on("stopTyping", ({ roomId }) => {
+        socket.to(roomId).emit("userStoppedTyping", {
+            userId: socket.user._id,
+        });
+    });
+
     // Vanish a message (deletes from DB and fades out for everyone)
     socket.on("vanishMessage", async ({ roomId, messageId }) => {
         try {

@@ -49,8 +49,11 @@ export default function Dashboard() {
     const [pendingStatus, setPendingStatus] = useState<string | null>(null);
     const [pendingRequests, setPendingRequests] = useState<PendingUser[]>([]);
     const [showPending, setShowPending] = useState(false);
+    const [typingUsers, setTypingUsers] = useState<{ userId: string; username: string }[]>([]);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const vanishIntervalRef = useRef<NodeJS.Timeout | null>(null);
+    const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const typingUserTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
 
     const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
 
@@ -78,6 +81,9 @@ export default function Dashboard() {
         return () => {
             if (socket) { socket.disconnect(); socket = null; }
             if (vanishIntervalRef.current) clearInterval(vanishIntervalRef.current);
+            if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+            typingUserTimeoutsRef.current.forEach((t) => clearTimeout(t));
+            typingUserTimeoutsRef.current.clear();
         };
     }, []);
 
@@ -89,7 +95,35 @@ export default function Dashboard() {
             setMessages((prev) => prev.map((m) => (m._id === messageId ? { ...m, vanishing: true } : m)));
             setTimeout(() => setMessages((prev) => prev.filter((m) => m._id !== messageId)), 600);
         });
-        return () => { if (socket) { socket.disconnect(); socket = null; } };
+        socket.on("userTyping", ({ userId, username }: { userId: string; username: string }) => {
+            if (userId === profile._id) return;
+            setTypingUsers((prev) => {
+                if (prev.some((u) => u.userId === userId)) return prev;
+                return [...prev, { userId, username }];
+            });
+            if (typingUserTimeoutsRef.current.has(userId)) {
+                clearTimeout(typingUserTimeoutsRef.current.get(userId)!);
+            }
+            typingUserTimeoutsRef.current.set(
+                userId,
+                setTimeout(() => {
+                    setTypingUsers((prev) => prev.filter((u) => u.userId !== userId));
+                    typingUserTimeoutsRef.current.delete(userId);
+                }, 3000)
+            );
+        });
+        socket.on("userStoppedTyping", ({ userId }: { userId: string }) => {
+            setTypingUsers((prev) => prev.filter((u) => u.userId !== userId));
+            if (typingUserTimeoutsRef.current.has(userId)) {
+                clearTimeout(typingUserTimeoutsRef.current.get(userId)!);
+                typingUserTimeoutsRef.current.delete(userId);
+            }
+        });
+        return () => {
+            if (socket) { socket.disconnect(); socket = null; }
+            typingUserTimeoutsRef.current.forEach((t) => clearTimeout(t));
+            typingUserTimeoutsRef.current.clear();
+        };
     }, [profile]);
 
     useEffect(() => {
@@ -111,11 +145,14 @@ export default function Dashboard() {
 
     const handleSelectRoom = async (room: Room) => {
         if (activeRoom && socket) socket.emit("leaveRoom", activeRoom._id);
+        if (socket && activeRoom) socket.emit("stopTyping", { roomId: activeRoom._id });
+        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
         setActiveRoom(room);
         setMessages([]);
         setVanishMode(false);
         setPendingStatus(null);
         setShowPending(false);
+        setTypingUsers([]);
         if (window.innerWidth < 768) setSidebarOpen(false);
 
         // Try to join the room
@@ -188,10 +225,27 @@ export default function Dashboard() {
         } catch (err) { console.error(err); }
     };
 
+    const handleInputChange = (value: string) => {
+        setNewMessage(value);
+        if (!socket || !activeRoom) return;
+        if (value.trim()) {
+            socket.emit("typing", { roomId: activeRoom._id });
+            if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+            typingTimeoutRef.current = setTimeout(() => {
+                socket?.emit("stopTyping", { roomId: activeRoom._id });
+            }, 2000);
+        } else {
+            socket.emit("stopTyping", { roomId: activeRoom._id });
+            if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+        }
+    };
+
     const handleSend = () => {
         if (!newMessage.trim() || !activeRoom || !socket) return;
         socket.emit("sendMessage", { roomId: activeRoom._id, text: newMessage.trim() });
         setNewMessage("");
+        socket.emit("stopTyping", { roomId: activeRoom._id });
+        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     };
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -443,11 +497,12 @@ export default function Dashboard() {
                                     const isMine = msg.sender === profile?._id;
                                     return (
                                         <div key={msg._id}
-                                            className={`flex ${isMine ? "justify-end" : "justify-start"} transition-all duration-500 ${msg.vanishing ? "opacity-0 scale-95 blur-sm" : "opacity-100 scale-100 blur-0"
+                                            className={`flex ${isMine ? "justify-end" : "justify-start"} ${msg.vanishing ? "" : "transition-all duration-500"
                                                 }`}
-                                            style={{ animation: msg.vanishing ? undefined : "messageAppear 0.3s ease-out" }}
+                                            style={{ animation: msg.vanishing ? "vanishHaunt 0.6s ease-in forwards" : "messageAppear 0.3s ease-out" }}
                                         >
                                             <div className={`max-w-[85%] sm:max-w-md rounded-2xl px-4 py-2.5 ${isMine ? "bg-emerald-600 text-white" : "bg-zinc-800 text-zinc-200"
+                                                } ${msg.vanishing ? isMine ? "bg-gradient-to-br from-emerald-600 via-amber-500 to-purple-700" : "bg-gradient-to-br from-zinc-800 via-amber-900/40 to-purple-900/40" : ""
                                                 }`}>
                                                 {!isMine && <p className="text-[11px] text-zinc-400 mb-1 font-medium">{msg.senderName}</p>}
                                                 <p className="text-sm leading-relaxed break-words">{msg.text}</p>
@@ -458,13 +513,27 @@ export default function Dashboard() {
                                         </div>
                                     );
                                 })}
+                                {typingUsers.length > 0 && (
+                                    <div className="flex items-center gap-2 px-1 py-1.5">
+                                        <div className="flex gap-1">
+                                            <span className="typing-dot w-1.5 h-1.5 bg-zinc-500 rounded-full inline-block" />
+                                            <span className="typing-dot w-1.5 h-1.5 bg-zinc-500 rounded-full inline-block" />
+                                            <span className="typing-dot w-1.5 h-1.5 bg-zinc-500 rounded-full inline-block" />
+                                        </div>
+                                        <p className="text-xs text-zinc-500">
+                                            {typingUsers.length === 1
+                                                ? `${typingUsers[0].username} is typing...`
+                                                : `${typingUsers.length} people are typing...`}
+                                        </p>
+                                    </div>
+                                )}
                                 <div ref={messagesEndRef} />
                             </div>
 
                             <div className="px-4 sm:px-6 py-3 bg-zinc-900 border-t border-zinc-800 shrink-0">
                                 <div className="flex items-center gap-3">
                                     <input type="text" placeholder="Type a message..." value={newMessage}
-                                        onChange={(e) => setNewMessage(e.target.value)} onKeyDown={handleKeyDown}
+                                        onChange={(e) => handleInputChange(e.target.value)} onKeyDown={handleKeyDown}
                                         className="flex-1 bg-zinc-950 text-sm text-white placeholder-zinc-500 border border-zinc-800 rounded-xl px-4 py-2.5 focus:outline-none focus:border-emerald-600 transition-all"
                                     />
                                     <button onClick={handleSend} disabled={!newMessage.trim()}
