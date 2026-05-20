@@ -6,8 +6,13 @@ import generateGhostName from "../utils/generateGhostName.js";
 export const signup = async (req, res) => {
     const { username, email, password, isAnonymous } = req.body;
     try {
-        const userExists = await User.findOne({ email });
-        if (userExists) return res.status(400).json({ message: "User already exists" });
+        const existingEmail = await User.findOne({ email });
+        if (existingEmail) return res.status(400).json({ message: "Email already exists" });
+
+        if (!isAnonymous && username) {
+            const existingUsername = await User.findOne({ username });
+            if (existingUsername) return res.status(400).json({ message: "Username already exists" });
+        }
 
         const finalUsername = isAnonymous ? generateGhostName() : username;
 
@@ -21,6 +26,10 @@ export const signup = async (req, res) => {
             email: user.email,
         });
     } catch (err) {
+        if (err.code === 11000) {
+            const field = Object.keys(err.keyPattern)[0];
+            return res.status(400).json({ message: `${field} already exists` });
+        }
         res.status(500).json({ message: "Server error", error: err.message });
     }
 }
